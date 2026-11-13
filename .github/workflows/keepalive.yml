@@ -1,0 +1,24 @@
+# Täglicher Keep-alive für das Supabase-Projekt (läuft auf GitHub, auch wenn der Mac aus ist).
+name: Supabase wach halten
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Keep-alive-Anfrage an Supabase
+        run: sh tools/keepalive.sh
+      - name: Repository aktiv halten (GitHub stoppt Zeitpläne nach 60 Tagen ohne Commit)
+        run: |
+          last=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - last )) -gt $((45*86400)) ]; then
+            date -u +%FT%TZ > .keepalive
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .keepalive && git commit -m "Keep-alive" && git push
+          fi

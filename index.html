@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notizwerk</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Notizwerk">
+<meta name="theme-color" content="#3b5bdb">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="toolbar">
+    <div id="appbar">
+      <button data-act="nav" title="Navigation ein-/ausblenden">☰</button>
+      <span class="brand">Notizwerk</span>
+      <button id="searchBox" data-act="search" title="Alle Notizen durchsuchen">Suchen <kbd>⌘K</kbd></button>
+      <span id="saveState"></span>
+      <button id="syncBtn" data-act="sync" title="Synchronisation">☁ Sync</button>
+      <button data-act="theme" title="Hell/Dunkel">◐</button>
+    </div>
+    <div id="tabs">
+      <button data-act="file" class="file">Datei</button>
+      <button data-act="tab" data-tab="start" class="on">Start</button>
+      <button data-act="tab" data-tab="insert">Einfügen</button>
+      <button data-act="tab" data-tab="draw">Zeichnen</button>
+      <button data-act="tab" data-tab="view">Ansicht</button>
+    </div>
+    <div id="ribbon">
+      <div class="rb" data-rb="start">
+        <button data-act="para" title="Absatzformat">Absatz ▾</button>
+        <span class="sep"></span>
+        <button data-act="bold" title="Fett (Strg/⌘+B)"><b>F</b></button>
+        <button data-act="italic" title="Kursiv (Strg/⌘+I)"><i>K</i></button>
+        <button data-act="underline" title="Unterstrichen (Strg/⌘+U)"><u>U</u></button>
+        <button data-act="strike" title="Durchgestrichen"><s>S</s></button>
+        <button data-act="hilite" title="Hervorheben"><span class="ico-h">A</span></button>
+        <button data-act="color" title="Textfarbe"><span class="ico-a">A</span></button>
+        <button data-act="clear" title="Formatierung entfernen">⌫</button>
+        <span class="sep"></span>
+        <button data-act="ul" title="Aufzählung">• Liste</button>
+        <button data-act="ol" title="Nummerierung">1. Liste</button>
+        <span class="sep"></span>
+        <button data-act="todo" title="Aufgabenliste">☑ Aufgabe</button>
+        <button data-act="tag" title="Zeile markieren">★ Kategorien ▾</button>
+        <span class="sep"></span>
+        <button data-act="cloze" title="Markierten Text zur Lücke machen">Lücke</button>
+        <button data-act="study" title="Lernmodus: Lücken verdecken">Abfragen</button>
+      </div>
+      <div class="rb" data-rb="insert" hidden>
+        <button data-act="table" title="Tabelle einfügen">▦ Tabelle</button>
+        <button data-act="image" title="Bild einfügen">▣ Bild</button>
+        <span class="sep"></span>
+        <button data-act="link" title="Weblink">Link</button>
+        <button data-act="plink" title="Auf eine andere Seite verlinken (oder [[Titel]] tippen)">Seitenlink</button>
+        <span class="sep"></span>
+        <button data-act="newpage" title="Neue Seite (Alt+N)">+ Neue Seite</button>
+      </div>
+      <div class="rb" data-rb="draw" hidden>
+        <div class="grp seg" id="modes">
+          <button data-act="mode" data-mode="text" class="on" title="Tippen und Auswählen (Esc)">Auswählen</button>
+          <button data-act="mode" data-mode="pen" title="Stift">Stift</button>
+          <button data-act="mode" data-mode="marker" title="Textmarker">Marker</button>
+          <button data-act="mode" data-mode="erase" title="Radierer">Radierer</button>
+        </div>
+        <div class="grp" id="drawtools" hidden></div>
+      </div>
+      <div class="rb" data-rb="view" hidden>
+        <button data-act="nav" title="Navigation ein-/ausblenden">☰ Navigation</button>
+        <button data-act="paper" title="Seitenhintergrund">Hilfslinien ▾</button>
+        <button data-act="theme" title="Hell/Dunkel">◐ Dunkler Modus</button>
+      </div>
+    </div>
+  </header>
+  <div id="body">
+    <nav id="nav">
+      <button id="nbBtn"></button>
+      <div class="cols">
+        <div class="col"><div class="colhead">Abschnitte</div><div id="sections"></div><button class="add" id="addSec">+ Abschnitt</button></div>
+        <div class="col"><div class="colhead">Seiten</div><div id="pages"></div><button class="add" id="addPage">+ Seite</button></div>
+      </div>
+    </nav>
+    <main id="main">
+      <div id="scroller">
+        <div id="pagehead">
+          <input id="title" placeholder="Unbenannte Seite" autocomplete="off">
+          <div id="meta"></div>
+        </div>
+        <div id="canvas"><svg id="ink"></svg></div>
+        <div id="backlinks"></div>
+      </div>
+    </main>
+  </div>
+</div>
+<div id="overlay"></div>
+<div id="toasts"></div>
+<input type="file" id="imgFile" accept="image/*" multiple hidden>
+<input type="file" id="jsonFile" accept=".json,application/json" hidden>
+<script src="config.js"></script>
+<script src="app.js"></script>
+<script src="sync.js"></script>
+</body>
+</html>
