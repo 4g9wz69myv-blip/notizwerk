@@ -580,7 +580,25 @@ function pathD(p) {
   for (let i = 2; i < p.length - 2; i += 2) d += ` Q${p[i]} ${p[i + 1]} ${r2((p[i] + p[i + 2]) / 2)} ${r2((p[i + 1] + p[i + 3]) / 2)}`;
   return d + ` L${p[p.length - 2]} ${p[p.length - 1]}`;
 }
+// Druck (Apple Pencil): s.pr hält je Punkt den Druck 0…1. Gezeichnet wird in Stufen,
+// jede Stufe ist ein Pfad mit eigener Strichstärke; runde Enden machen die Übergänge weich.
+const LV = 12, prLv = v => Math.round(Math.max(0, Math.min(1, v)) * (LV - 1));
+const lvW = (w, l) => r2(w * (.4 + 1.5 * l / (LV - 1)));
+function segD(p, i) {
+  const n = p.length / 2, x = p[2 * i], y = p[2 * i + 1];
+  if (n === 1) return `M${x} ${y}l.01 0`;
+  const ax = i ? r2((p[2 * i - 2] + x) / 2) : x, ay = i ? r2((p[2 * i - 1] + y) / 2) : y;
+  const bx = i < n - 1 ? r2((x + p[2 * i + 2]) / 2) : x, by = i < n - 1 ? r2((y + p[2 * i + 3]) / 2) : y;
+  return `M${ax} ${ay}Q${x} ${y} ${bx} ${by}`;
+}
 function strokeEl(s) {
+  if (s.pr) {
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g'), ds = [];
+    for (let i = 0; i < s.pr.length; i++) { const l = prLv(s.pr[i]); ds[l] = (ds[l] || '') + segD(s.p, i); }
+    g.setAttribute('stroke', s.c === 'auto' ? 'currentColor' : s.c);
+    ds.forEach((d, l) => { const el = document.createElementNS('http://www.w3.org/2000/svg', 'path'); el.setAttribute('d', d); el.setAttribute('stroke-width', lvW(s.w, l)); g.append(el); });
+    return g;
+  }
   const el = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   el.setAttribute('d', pathD(s.p)); el.setAttribute('stroke', s.c === 'auto' ? 'currentColor' : s.c); el.setAttribute('stroke-width', s.w); if (s.o) el.setAttribute('stroke-opacity', s.o);
   return el;
@@ -592,7 +610,7 @@ function segDist(px, py, ax, ay, bx, by) {
 }
 // Überflüssige Punkte auf geraden Stücken entfernen (hält die Notizen klein), Kurven und Ecken bleiben.
 function thin(p, eps = .2, gap = 3) {
-  const n = p.length / 2; if (n < 4) return p;
+  const n = p.length / 2; if (n < 4) return [...Array(n).keys()];
   const keep = new Uint8Array(n), todo = [[0, n - 1]]; keep[0] = keep[n - 1] = 1;
   while (todo.length) {
     const [a, b] = todo.pop(); let m = 0, mi = -1;
@@ -602,7 +620,7 @@ function thin(p, eps = .2, gap = 3) {
   const out = []; let lx = p[0], ly = p[1];
   for (let i = 0; i < n; i++) {
     const x = p[2 * i], y = p[2 * i + 1];
-    if (keep[i] || Math.hypot(x - lx, y - ly) >= gap) { out.push(x, y); lx = x; ly = y; }
+    if (keep[i] || Math.hypot(x - lx, y - ly) >= gap) { out.push(i); lx = x; ly = y; }
   }
   return out;
 }
@@ -626,6 +644,7 @@ const ptIn = (e, r) => [Math.round((e.clientX - r.left) * 10) / 10, Math.round((
 const events = e => { const c = e.getCoalescedEvents?.(); return c && c.length ? c : [e]; };
 function drawLive() {
   if (!live || !stroke) return; live.raf = 0; const q = stroke.p;
+  if (stroke.pr) { const g = strokeEl(stroke); strokePath.replaceWith(g); strokePath = g; return; }
   strokePath.setAttribute('d', q.length === 2 ? pathD(q) : live.d + ` L${q[q.length - 2]} ${q[q.length - 1]}`);
 }
 function beginStroke(e) {
@@ -635,6 +654,7 @@ function beginStroke(e) {
   if (mode === 'erase') { erasing = true; eraseAt(p); return; }
   const pen = state.ui.pen;
   stroke = mode === 'marker' ? { c: pen.color === 'auto' ? '#f5c400' : pen.color, w: pen.width * 6, o: .35, p } : { c: pen.color, w: pen.width, p };
+  if (mode === 'pen' && e.pointerType === 'pen' && e.pressure > 0) stroke.pr = [r2(e.pressure)];
   strokePath = strokeEl(stroke); ink.append(strokePath);
 }
 function dropStroke() {
@@ -675,6 +695,7 @@ ink.addEventListener('pointermove', e => {
     if (Math.hypot(x - px, y - py) < live.min) continue;
     if (n >= 4) live.d += ` Q${px} ${py} ${r2((px + x) / 2)} ${r2((py + y) / 2)}`;
     q.push(x, y);
+    if (stroke.pr) { const pr = stroke.pr; pr.push(r2(.6 * pr[pr.length - 1] + .4 * (ev.pressure || pr[pr.length - 1]))); }
   }
   if (!live.raf) live.raf = requestAnimationFrame(drawLive);
 });
@@ -691,7 +712,9 @@ const endStroke = e => {
   cancelAnimationFrame(live.raf); live = null;
   if (erasing) { erasing = false; return; }
   const s = stroke, el = strokePath; stroke = strokePath = null; if (!s) return;
-  s.p = thin(s.p); el.setAttribute('d', pathD(s.p));
+  const ix = thin(s.p), q = s.p; s.p = []; for (const i of ix) s.p.push(q[2 * i], q[2 * i + 1]);
+  if (s.pr) s.pr = ix.map(i => s.pr[i]);
+  const fin = strokeEl(s); el.replaceWith(fin);
   const p = pageOf(); p.strokes.push(s); touch(p);
   let mx = 0, my = 0; for (let i = 0; i < s.p.length; i += 2) { if (s.p[i] > mx) mx = s.p[i]; if (s.p[i + 1] > my) my = s.p[i + 1]; }
   if (mx + 300 > canvas.offsetWidth) canvas.style.width = (mx + 300) + 'px';
