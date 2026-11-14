@@ -64,7 +64,7 @@ function seed() {
     { id: uid(), x: 48, y: 30, w: 520, html:
       '<h2>So funktioniert es</h2>' +
       '<div>Klicke <b>irgendwo</b> auf die Seite und schreibe los. Jeder Textkasten lässt sich am grauen Balken oben verschieben und am rechten Rand breiter ziehen.</div><div><br></div>' +
-      '<ul><li>Links: <b>Notizbuch → Abschnitte → Seiten</b> (Rechtsklick für Optionen, Ziehen zum Sortieren)</li>' +
+      '<ul><li>Links: <b>Notizbuch → Abschnitte → Seiten</b> (⋯ für Umbenennen, Verschieben, Löschen)</li>' +
       '<li><b>Stift</b>, <b>Marker</b> und <b>Radierer</b> zum Zeichnen über allem</li>' +
       '<li>Bilder einfach hineinziehen oder einfügen</li>' +
       '<li><b>⌘K / Strg+K</b> durchsucht alle Notizen sofort</li>' +
@@ -224,14 +224,15 @@ function ensure() {
   const n = nbOf(); if (!n.sections.length) n.sections.push(mkSection('Allgemein', n.color));
   const s = secOf(); if (!s.pages.length) s.pages.push(mkPage(''));
 }
+const MORE = '<button class="more" title="Optionen: umbenennen, verschieben, löschen">⋯</button>';
 function renderNav() {
   ensure();
   const nb = nbOf(), sec = secOf(), page = pageOf();
   $('#nbBtn').innerHTML = `<span class="dot" style="background:${esc(nb.color)}"></span><b>${esc(nb.name)}</b><span>▾</span>`;
-  $('#sections').innerHTML = nb.sections.map(s => `<div class="sec${s.id === sec.id ? ' on' : ''}" draggable="true" data-id="${s.id}" style="--c:${esc(s.color)}" title="${esc(s.name)}">${esc(s.name)}</div>`).join('');
+  $('#sections').innerHTML = nb.sections.map(s => `<div class="sec${s.id === sec.id ? ' on' : ''}" draggable="true" data-id="${s.id}" style="--c:${esc(s.color)}" title="${esc(s.name)}">${esc(s.name)}${MORE}</div>`).join('');
   $('#pages').innerHTML = sec.pages.map(p => {
     const prev = pageText(p).slice(0, 70);
-    return `<div class="pg lvl${p.lvl || 0}${p.id === page.id ? ' on' : ''}" draggable="true" data-id="${p.id}" style="--c:${esc(sec.color)}"><span class="t${p.title ? '' : ' empty'}">${esc(p.title || 'Unbenannte Seite')}</span><small>${esc(prev) || '&nbsp;'}</small></div>`;
+    return `<div class="pg lvl${p.lvl || 0}${p.id === page.id ? ' on' : ''}" draggable="true" data-id="${p.id}" style="--c:${esc(sec.color)}"><span class="t${p.title ? '' : ' empty'}">${esc(p.title || 'Unbenannte Seite')}</span><small>${esc(prev) || '&nbsp;'}</small>${MORE}</div>`;
   }).join('');
 }
 function selectSection(id) {
@@ -290,14 +291,28 @@ async function deleteNotebook() {
   state.notebooks.splice(state.notebooks.indexOf(nb), 1); if (!state.notebooks.length) state.notebooks.push(mkNotebook('Mein Notizbuch'));
   selectNotebook(state.notebooks[0].id);
 }
+function moveBy(arr, id, d) {
+  const i = arr.findIndex(x => x.id === id), j = i + d; if (i < 0 || j < 0 || j >= arr.length) return;
+  arr.splice(j, 0, arr.splice(i, 1)[0]); renderNav(); save();
+}
+const upDown = (arr, id) => { const i = arr.findIndex(x => x.id === id); return [i > 0 && { label: '↑ Nach oben', fn: () => moveBy(arr, id, -1) }, i < arr.length - 1 && { label: '↓ Nach unten', fn: () => moveBy(arr, id, 1) }]; };
+function moveSection(id, nbId) {
+  const nb = nbOf(), s = nb.sections.find(x => x.id === id), target = state.notebooks.find(n => n.id === nbId); if (!s || !target || target === nb) return;
+  nb.sections.splice(nb.sections.indexOf(s), 1); if (!nb.sections.length) nb.sections.push(mkSection('Allgemein', nb.color));
+  target.sections.push(s);
+  if (state.ui.sec === id) selectSection(nb.sections[0].id); else { render(); save(); }
+  toast(`Abschnitt verschoben nach „${target.name}“`);
+}
 $('#nbBtn').onclick = e => {
-  const nb = nbOf();
-  menu(e.currentTarget, [
-    { head: 'Notizbücher' },
+  const nb = nbOf(), anchor = e.currentTarget;
+  menu(anchor, [
+    { head: 'Notizbuch wechseln' },
     ...state.notebooks.map(n => ({ label: n.name, checked: n.id === nb.id, fn: () => selectNotebook(n.id) })),
-    '-',
     { label: '+ Neues Notizbuch', fn: async () => { const name = await ask('Name des Notizbuchs', '', 'Anlegen'); if (!name) return; const n = mkNotebook(name, COLORS[state.notebooks.length % COLORS.length]); state.notebooks.push(n); selectNotebook(n.id); } },
+    '-',
+    { head: `„${nb.name}“` },
     { label: 'Umbenennen', fn: async () => { const name = await ask('Notizbuch umbenennen', nb.name); if (name) { nb.name = name; renderNav(); save(); } } },
+    ...upDown(state.notebooks, nb.id),
     { swatches: COLORS, fn: c => { nb.color = c; renderNav(); save(); } },
     { label: 'Notizbuch löschen', danger: true, fn: deleteNotebook }
   ]);
@@ -308,37 +323,54 @@ $('#addSec').onclick = async () => {
 };
 $('#addPage').onclick = () => newPage();
 async function renameSection(id) { const s = nbOf().sections.find(x => x.id === id); const name = await ask('Abschnitt umbenennen', s.name); if (name) { s.name = name; renderNav(); save(); } }
-$('#sections').addEventListener('click', e => { const it = e.target.closest('.sec'); if (it) selectSection(it.dataset.id); });
-$('#sections').addEventListener('dblclick', e => { const it = e.target.closest('.sec'); if (it) renameSection(it.dataset.id); });
-$('#sections').addEventListener('contextmenu', e => {
-  const it = e.target.closest('.sec'); if (!it) return; e.preventDefault(); const id = it.dataset.id;
-  menu({ x: e.clientX, y: e.clientY }, [
+function secMenu(anchor, id) {
+  const nb = nbOf();
+  menu(anchor, [
     { label: 'Umbenennen', fn: () => renameSection(id) },
-    { swatches: COLORS, fn: c => { nbOf().sections.find(x => x.id === id).color = c; renderNav(); save(); } },
+    ...upDown(nb.sections, id),
+    { label: 'In anderes Notizbuch verschieben …', fn: () => {
+      const items = [{ head: 'Ziel-Notizbuch' }, ...state.notebooks.filter(n => n !== nb).map(n => ({ label: n.name, fn: () => moveSection(id, n.id) }))];
+      if (items.length === 1) return toast('Es gibt noch kein anderes Notizbuch.');
+      menu(anchor, items);
+    } },
+    { swatches: COLORS, fn: c => { nb.sections.find(x => x.id === id).color = c; renderNav(); save(); } },
     { label: 'Abschnitt löschen', danger: true, fn: () => deleteSection(id) }
   ]);
-});
-$('#pages').addEventListener('click', e => { const it = e.target.closest('.pg'); if (it && it.dataset.id !== state.ui.page) go(it.dataset.id); if (it && innerWidth <= 820) document.body.classList.add('nonav'); });
-$('#pages').addEventListener('contextmenu', e => {
-  const it = e.target.closest('.pg'); if (!it) return; e.preventDefault(); const id = it.dataset.id, x = findPage(id);
+}
+function pageMenu(anchor, id) {
+  const x = findPage(id); if (!x) return;
   const setLvl = d => { x.page.lvl = Math.max(0, Math.min(2, (x.page.lvl || 0) + d)); renderNav(); save(); };
-  menu({ x: e.clientX, y: e.clientY }, [
+  menu(anchor, [
     { label: 'Neue Seite darunter', fn: () => newPage(id, x.page.lvl || 0) },
     { label: 'Neue Unterseite', fn: () => newPage(id, Math.min(2, (x.page.lvl || 0) + 1)) },
     '-',
-    (x.page.lvl || 0) < 2 && { label: 'Zur Unterseite machen →', fn: () => setLvl(1) },
-    (x.page.lvl || 0) > 0 && { label: '← Höher stufen', fn: () => setLvl(-1) },
-    { label: 'Duplizieren', fn: () => duplicatePage(id) },
-    { label: 'Verschieben nach …', fn: () => {
+    ...upDown(x.sec.pages, id),
+    { label: 'In anderen Abschnitt verschieben …', fn: () => {
       const items = [{ head: 'Ziel-Abschnitt' }];
       for (const nb of state.notebooks) for (const s of nb.sections) if (s.id !== x.sec.id) items.push({ label: `${nb.name} › ${s.name}`, fn: () => movePage(id, s.id) });
       if (items.length === 1) return toast('Es gibt noch keinen anderen Abschnitt.');
-      menu({ x: e.clientX, y: e.clientY }, items);
+      menu(anchor, items);
     } },
+    (x.page.lvl || 0) < 2 && { label: 'Zur Unterseite machen →', fn: () => setLvl(1) },
+    (x.page.lvl || 0) > 0 && { label: '← Höher stufen', fn: () => setLvl(-1) },
+    { label: 'Duplizieren', fn: () => duplicatePage(id) },
     '-',
     { label: 'Seite löschen', danger: true, fn: () => deletePage(id) }
   ]);
+}
+$('#sections').addEventListener('click', e => {
+  const it = e.target.closest('.sec'), more = e.target.closest('.more'); if (!it) return;
+  if (more) secMenu(more, it.dataset.id); else selectSection(it.dataset.id);
 });
+$('#sections').addEventListener('dblclick', e => { const it = e.target.closest('.sec'); if (it && !e.target.closest('.more')) renameSection(it.dataset.id); });
+$('#sections').addEventListener('contextmenu', e => { const it = e.target.closest('.sec'); if (!it) return; e.preventDefault(); secMenu({ x: e.clientX, y: e.clientY }, it.dataset.id); });
+$('#pages').addEventListener('click', e => {
+  const it = e.target.closest('.pg'), more = e.target.closest('.more'); if (!it) return;
+  if (more) return pageMenu(more, it.dataset.id);
+  if (it.dataset.id !== state.ui.page) go(it.dataset.id);
+  if (innerWidth <= 820) document.body.classList.add('nonav');
+});
+$('#pages').addEventListener('contextmenu', e => { const it = e.target.closest('.pg'); if (!it) return; e.preventDefault(); pageMenu({ x: e.clientX, y: e.clientY }, it.dataset.id); });
 // Sortieren per Drag & Drop
 let drag = null;
 function dnd(list, type, getArr) {
@@ -541,10 +573,11 @@ canvas.addEventListener('drop', e => {
 });
 
 // ---------- Zeichnen ----------
+const r2 = v => Math.round(v * 100) / 100;
 function pathD(p) {
   if (p.length === 2) return `M${p[0]} ${p[1]}l.01 0`;
   let d = `M${p[0]} ${p[1]}`;
-  for (let i = 2; i < p.length - 2; i += 2) d += ` Q${p[i]} ${p[i + 1]} ${(p[i] + p[i + 2]) / 2} ${(p[i + 1] + p[i + 3]) / 2}`;
+  for (let i = 2; i < p.length - 2; i += 2) d += ` Q${p[i]} ${p[i + 1]} ${r2((p[i] + p[i + 2]) / 2)} ${r2((p[i + 1] + p[i + 3]) / 2)}`;
   return d + ` L${p[p.length - 2]} ${p[p.length - 1]}`;
 }
 function strokeEl(s) {
@@ -553,10 +586,25 @@ function strokeEl(s) {
   return el;
 }
 function renderInk() { ink.replaceChildren(...pageOf().strokes.map(strokeEl)); }
-let stroke = null, strokePath = null, erasing = false;
 function segDist(px, py, ax, ay, bx, by) {
   const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy; let t = l ? ((px - ax) * dx + (py - ay) * dy) / l : 0; t = Math.max(0, Math.min(1, t));
   return Math.hypot(px - ax - t * dx, py - ay - t * dy);
+}
+// Überflüssige Punkte auf geraden Stücken entfernen (hält die Notizen klein), Kurven und Ecken bleiben.
+function thin(p, eps = .2, gap = 3) {
+  const n = p.length / 2; if (n < 4) return p;
+  const keep = new Uint8Array(n), todo = [[0, n - 1]]; keep[0] = keep[n - 1] = 1;
+  while (todo.length) {
+    const [a, b] = todo.pop(); let m = 0, mi = -1;
+    for (let i = a + 1; i < b; i++) { const d = segDist(p[2 * i], p[2 * i + 1], p[2 * a], p[2 * a + 1], p[2 * b], p[2 * b + 1]); if (d > m) { m = d; mi = i; } }
+    if (m > eps) { keep[mi] = 1; todo.push([a, mi], [mi, b]); }
+  }
+  const out = []; let lx = p[0], ly = p[1];
+  for (let i = 0; i < n; i++) {
+    const x = p[2 * i], y = p[2 * i + 1];
+    if (keep[i] || Math.hypot(x - lx, y - ly) >= gap) { out.push(x, y); lx = x; ly = y; }
+  }
+  return out;
 }
 function eraseAt([x, y]) {
   const p = pageOf(); let hit = false;
@@ -568,27 +616,97 @@ function eraseAt([x, y]) {
   });
   if (hit) { renderInk(); touch(p); }
 }
-ink.addEventListener('pointerdown', e => {
-  if (mode === 'text' || e.button !== 0) return; e.preventDefault(); ink.setPointerCapture(e.pointerId);
-  const p = pt(e);
+// Finger: zeichnen oder scrollen? Sobald ein Stift (Apple Pencil) benutzt wird, scrollt der Finger.
+let fingerPref = null; try { fingerPref = localStorage.getItem('notizwerk:finger'); } catch { }
+const fingerDraws = () => fingerPref !== 'scroll';
+function setFinger(v) { fingerPref = v; try { localStorage.setItem('notizwerk:finger', v); } catch { } renderDrawTools(); }
+// live = laufender Strich/Radierer (ein Zeiger), pan = Finger verschiebt die Seite
+let stroke = null, strokePath = null, erasing = false, live = null, pan = null, penAt = 0;
+const ptIn = (e, r) => [Math.round((e.clientX - r.left) * 10) / 10, Math.round((e.clientY - r.top) * 10) / 10];
+const events = e => { const c = e.getCoalescedEvents?.(); return c && c.length ? c : [e]; };
+function drawLive() {
+  if (!live || !stroke) return; live.raf = 0; const q = stroke.p;
+  strokePath.setAttribute('d', q.length === 2 ? pathD(q) : live.d + ` L${q[q.length - 2]} ${q[q.length - 1]}`);
+}
+function beginStroke(e) {
+  e.preventDefault(); try { ink.setPointerCapture(e.pointerId); } catch { }
+  const r = canvas.getBoundingClientRect(), p = ptIn(e, r);
+  live = { id: e.pointerId, type: e.pointerType, r, d: `M${p[0]} ${p[1]}`, raf: 0, min: e.pointerType === 'pen' ? .6 : 1 };
   if (mode === 'erase') { erasing = true; eraseAt(p); return; }
   const pen = state.ui.pen;
   stroke = mode === 'marker' ? { c: pen.color === 'auto' ? '#f5c400' : pen.color, w: pen.width * 6, o: .35, p } : { c: pen.color, w: pen.width, p };
   strokePath = strokeEl(stroke); ink.append(strokePath);
+}
+function dropStroke() {
+  if (live) cancelAnimationFrame(live.raf);
+  strokePath?.remove(); stroke = strokePath = live = null; erasing = false;
+}
+ink.addEventListener('pointerdown', e => {
+  if (mode === 'text' || e.button !== 0) return;
+  const type = e.pointerType;
+  if (type === 'pen') {
+    penAt = Date.now(); pan = null;
+    if (fingerPref === null) { setFinger('scroll'); toast('Stift erkannt – mit dem Finger verschiebst du jetzt die Seite.'); }
+    if (live && live.type !== 'pen') dropStroke();           // Handballen hat vor dem Stift aufgesetzt
+  } else if (type === 'touch') {
+    e.preventDefault();
+    if (live?.type === 'pen' || Date.now() - penAt < 400) return; // Handballen neben dem Stift ignorieren
+    if (!fingerDraws()) {
+      if (!pan && !live) { try { ink.setPointerCapture(e.pointerId); } catch { } pan = { id: e.pointerId, x: e.clientX, y: e.clientY, vx: 0, vy: 0, t: e.timeStamp }; }
+      return;
+    }
+  }
+  if (live) return;                                           // nur ein Strich gleichzeitig
+  beginStroke(e);
 });
 ink.addEventListener('pointermove', e => {
-  if (erasing) return eraseAt(pt(e));
-  if (!stroke) return;
-  for (const ev of (e.getCoalescedEvents?.().length ? e.getCoalescedEvents() : [e])) {
-    const [x, y] = pt(ev), q = stroke.p; if (Math.hypot(x - q[q.length - 2], y - q[q.length - 1]) > 1.5) q.push(x, y);
+  if (pan && e.pointerId === pan.id) {
+    const dx = e.clientX - pan.x, dy = e.clientY - pan.y, dt = Math.max(1, e.timeStamp - pan.t);
+    scroller.scrollLeft -= dx; scroller.scrollTop -= dy;
+    pan.vx = .6 * pan.vx + .4 * dx / dt; pan.vy = .6 * pan.vy + .4 * dy / dt; pan.x = e.clientX; pan.y = e.clientY; pan.t = e.timeStamp;
+    return;
   }
-  strokePath.setAttribute('d', pathD(stroke.p));
+  if (!live || e.pointerId !== live.id) return;
+  if (live.type === 'pen') penAt = Date.now();
+  if (erasing) { for (const ev of events(e)) eraseAt(ptIn(ev, live.r)); return; }
+  const q = stroke.p;
+  for (const ev of events(e)) {
+    const [x, y] = ptIn(ev, live.r), n = q.length, px = q[n - 2], py = q[n - 1];
+    if (Math.hypot(x - px, y - py) < live.min) continue;
+    if (n >= 4) live.d += ` Q${px} ${py} ${r2((px + x) / 2)} ${r2((py + y) / 2)}`;
+    q.push(x, y);
+  }
+  if (!live.raf) live.raf = requestAnimationFrame(drawLive);
 });
-const endStroke = () => {
-  erasing = false; if (!stroke) return;
-  const p = pageOf(); p.strokes.push(stroke); stroke = strokePath = null; touch(p); fitCanvas();
+function endPan(e) {
+  const p = pan; pan = null; if (!p || e.type === 'pointercancel' || e.timeStamp - p.t > 60) return;
+  const cl = v => Math.max(-50, Math.min(50, v * 16)); let vx = cl(p.vx), vy = cl(p.vy);                          // Nachlauf wie beim normalen Scrollen
+  const step = () => { if (pan || live || Math.hypot(vx, vy) < .4) return; scroller.scrollLeft -= vx; scroller.scrollTop -= vy; vx *= .94; vy *= .94; requestAnimationFrame(step); };
+  step();
+}
+const endStroke = e => {
+  if (pan && e.pointerId === pan.id) return endPan(e);
+  if (!live || e.pointerId !== live.id) return;
+  if (live.type === 'pen') penAt = Date.now();
+  cancelAnimationFrame(live.raf); live = null;
+  if (erasing) { erasing = false; return; }
+  const s = stroke, el = strokePath; stroke = strokePath = null; if (!s) return;
+  s.p = thin(s.p); el.setAttribute('d', pathD(s.p));
+  const p = pageOf(); p.strokes.push(s); touch(p);
+  let mx = 0, my = 0; for (let i = 0; i < s.p.length; i += 2) { if (s.p[i] > mx) mx = s.p[i]; if (s.p[i + 1] > my) my = s.p[i + 1]; }
+  if (mx + 300 > canvas.offsetWidth) canvas.style.width = (mx + 300) + 'px';
+  if (my + 500 > canvas.offsetHeight) canvas.style.height = (my + 500) + 'px';
 };
 ink.addEventListener('pointerup', endStroke); ink.addEventListener('pointercancel', endStroke);
+// Safari: keine Lupe, kein Markieren, kein Mitscrollen, solange gezeichnet wird
+for (const t of ['touchstart', 'touchmove']) ink.addEventListener(t, e => { if (mode !== 'text' && e.cancelable) e.preventDefault(); }, { passive: false });
+// Stift setzt auf freier Fläche auf → sofort zeichnen, ohne erst das Werkzeug zu wählen
+canvas.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'pen' || mode !== 'text' || e.target !== canvas || e.button !== 0) return;
+  ACT.tab($('#tabs [data-tab=draw]'));
+  if (fingerPref === null) setFinger('scroll');
+  penAt = Date.now(); beginStroke(e);
+});
 function undoStroke() { const p = pageOf(); if (p.strokes.pop()) { renderInk(); touch(p); } }
 function setMode(m) {
   mode = m; canvas.classList.toggle('drawing', m !== 'text');
@@ -602,6 +720,8 @@ function renderDrawTools() {
   box.append(h('<span class="sep"></span>'));
   for (const w of [1.5, 2.5, 4.5]) { const b = h(`<button class="wbtn${pen.width === w ? ' on' : ''}" title="Strichstärke"><i style="width:${w * 2.4}px;height:${w * 2.4}px"></i></button>`); b.onclick = () => { pen.width = w; renderDrawTools(); save(); }; box.append(b); }
   const u = h('<button title="Letzten Strich zurücknehmen (Strg/⌘+Z)">↶</button>'); u.onclick = undoStroke; box.append(u);
+  box.append(h('<span class="sep"></span>'));
+  const f = h(`<button title="Mit dem Finger zeichnen oder die Seite verschieben">${fingerDraws() ? 'Finger zeichnet' : 'Finger scrollt'}</button>`); f.onclick = () => setFinger(fingerDraws() ? 'scroll' : 'draw'); box.append(f);
 }
 
 // ---------- Formatierung ----------

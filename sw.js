@@ -1,5 +1,5 @@
 // Offline-Unterstützung: App-Dateien werden zwischengespeichert, Netzwerk hat Vorrang.
-const CACHE = 'notizwerk-v1';
+const CACHE = 'notizwerk-v2';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'sync.js', 'config.js', 'icon.svg', 'icon-180.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(

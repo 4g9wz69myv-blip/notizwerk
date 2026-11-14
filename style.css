@@ -63,6 +63,9 @@ body.nonav #nav{display:none}
 .add{color:var(--mut);text-align:left;border-top:1px solid var(--line);border-radius:0;padding:10px 12px}
 .col:last-child{background:var(--bg)}
 .sec,.pg{position:relative;padding:7px 10px;border-radius:6px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;user-select:none;margin-bottom:1px}
+.sec,.pg{padding-right:30px}
+.more{position:absolute;right:3px;top:50%;transform:translateY(-50%);width:24px;height:26px;padding:0;border-radius:6px;color:var(--mut);opacity:.55;font-size:17px;line-height:1}
+.sec:hover .more,.pg:hover .more,.more:hover{opacity:1}
 .sec{border-left:4px solid var(--c);border-radius:3px 6px 6px 3px}
 .sec:hover,.pg:hover{background:var(--line)}
 .sec.on{background:color-mix(in srgb,var(--c) 20%,var(--paper));font-weight:600}
@@ -91,6 +94,7 @@ body.nonav #nav{display:none}
 #ink{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;color:var(--fg);z-index:5;overflow:visible}
 #ink path{fill:none;stroke-linecap:round;stroke-linejoin:round}
 #canvas.drawing{cursor:crosshair}
+#canvas.drawing,#canvas.drawing #ink{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 #canvas.drawing #ink{pointer-events:all;touch-action:none}
 .block{position:absolute;border:1px solid transparent;border-radius:0 0 6px 6px}
 .block:hover,.block:focus-within{border-color:var(--line)}
